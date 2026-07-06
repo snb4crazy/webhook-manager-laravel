@@ -18,6 +18,15 @@ class WebhookSignerTest extends TestCase
         $this->assertTrue($signer->verify($payload, $header, $secret, 300));
     }
 
+    public function test_it_rejects_expired_signature(): void
+    {
+        $signer = new WebhookSigner;
+        $payload = '{"event":"order.created"}';
+        $secret = 'super-secret';
 
+        $header = $signer->makeHeader($payload, $secret, time() - 1200);
+
+        $this->assertFalse($signer->verify($payload, $header, $secret, 300));
+    }
 }
 
