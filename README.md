@@ -49,6 +49,63 @@ WEBHOOK_MANAGER_CONNECT_TIMEOUT=5
 WEBHOOK_MANAGER_TIMEOUT=10
 ```
 
+## Usage
+
+### 1) Send a webhook
+
+```php
+use WebhookManager\Laravel\Facades\Webhook;
+
+Webhook::send(
+    url: 'https://receiver.example.com/hooks/notifyhub',
+    payload: [
+        'event' => 'notifyhub.event.created',
+        'event_id' => $event->public_id,
+        'severity' => $event->severity,
+        'title' => $event->title,
+        'message' => $event->message,
+    ],
+    options: [
+        'event' => 'notifyhub.event.created',
+        'secret' => config('services.notifyhub.outbound_secret'),
+        'headers' => [
+            'X-Webhook-Source' => config('app.name'),
+        ],
+        'max_attempts' => 5,
+        'queue' => true,
+    ],
+);
+```
+
+### 2) Verify an incoming webhook
+
+```php
+use Illuminate\Http\Request;
+use WebhookManager\Laravel\Facades\Webhook;
+
+public function __invoke(Request $request)
+{
+    $signature = (string) $request->header('X-Webhook-Signature');
+
+    abort_unless(
+        Webhook::verify($request->getContent(), $signature, config('services.partner.secret')),
+        401,
+        'Invalid webhook signature.',
+    );
+
+    // Process verified payload...
+}
+```
+
+### 3) Manual retry
+
+```php
+use WebhookManager\Laravel\Facades\Webhook;
+
+Webhook::retry($deliveryId);
+// or: Webhook::retry($deliveryModel);
+```
+
 
 ## License
 
