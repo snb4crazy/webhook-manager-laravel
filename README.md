@@ -106,6 +106,40 @@ Webhook::retry($deliveryId);
 // or: Webhook::retry($deliveryModel);
 ```
 
+## Delivery logs
+
+Each send call creates a row in `webhook_deliveries` with:
+
+- status (`pending`, `delivered`, `failed`)
+- attempts and max attempts
+- last error and response status
+- payload, headers, generated signature
+
+Use this table for dashboards, failed delivery admin pages, and replay tooling.
+
+## Integration idea with NotifyHub server
+
+When a new event is saved, trigger outbound hooks in a queue job:
+
+```php
+Webhook::send('https://consumer-app.test/hooks/notifyhub', [
+    'event_id' => $event->public_id,
+    'title' => $event->title,
+    'message' => $event->message,
+    'severity' => $event->severity,
+    'occurred_at' => $event->occurred_at?->toIso8601String(),
+], [
+    'event' => 'notifyhub.event.created',
+    'secret' => $project->webhook_secret,
+    'queue' => true,
+]);
+```
+
+## Testing
+
+```bash
+composer test
+```
 
 ## License
 
