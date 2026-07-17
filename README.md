@@ -1,19 +1,16 @@
 # webhook-manager-laravel
 
-Queue-aware webhook delivery package for Laravel.
 
-It gives you a clean API:
+Queue-aware webhook delivery package for Laravel with HMAC signing, signature verification, retries, and delivery logs.
 
-- `Webhook::send(...)`
-- `Webhook::verify(...)`
-- `Webhook::retry(...)`
+## Features
 
-And built-in portfolio-ready features:
-
-- HMAC signatures (timestamped)
-- Async delivery with queue jobs
-- Retry with backoff
-- Delivery log table (`webhook_deliveries`)
+- `Webhook::send(...)` for outbound webhook delivery
+- `Webhook::verify(...)` for inbound signature verification
+- `Webhook::retry(...)` for manual replay
+- Timestamped SHA-256 HMAC signature header (`t=<ts>,v1=<hmac>`)
+- Queue-driven delivery with configurable retries/backoff
+- `webhook_deliveries` table for observability and replay workflows
 
 ## Requirements
 
@@ -22,18 +19,46 @@ And built-in portfolio-ready features:
 | PHP        | 8.2+    |
 | Laravel    | 10-13   |
 
-## Installation
+## Installation (before Packagist)
+
+Since this package is not yet on Packagist, install it directly from GitHub as a VCS dependency.
+
+1. Add repository source in your app `composer.json`:
+
+```json
+{
+  "repositories": [
+    {
+      "type": "vcs",
+      "url": "https://github.com/snb4crazy/webhook-manager-laravel"
+    }
+  ]
+}
+```
+
+2. Require the package:
 
 ```bash
-composer require snb4crazy/webhook-manager-laravel
+composer require snb4crazy/webhook-manager-laravel:dev-main
+```
+
+3. Publish config + migrations and migrate:
+
+```bash
 php artisan vendor:publish --tag=webhook-manager-config
 php artisan vendor:publish --tag=webhook-manager-migrations
 php artisan migrate
 ```
 
+4. If queue delivery is enabled (default), run a queue worker:
+
+```bash
+php artisan queue:work
+```
+
 ## Configuration
 
-Add to `.env`:
+Set package options in `.env`:
 
 ```env
 WEBHOOK_MANAGER_ENABLED=true
@@ -47,37 +72,35 @@ WEBHOOK_MANAGER_QUEUE_NAME=webhooks
 WEBHOOK_MANAGER_MAX_ATTEMPTS=3
 WEBHOOK_MANAGER_CONNECT_TIMEOUT=5
 WEBHOOK_MANAGER_TIMEOUT=10
+WEBHOOK_MANAGER_LOG_CHANNEL=
+WEBHOOK_MANAGER_STORE_RESPONSE_BODY=false
 ```
 
-## Usage
+## Quick start
 
-### 1) Send a webhook
+### Send a webhook
 
 ```php
 use WebhookManager\Laravel\Facades\Webhook;
 
 Webhook::send(
-    url: 'https://receiver.example.com/hooks/notifyhub',
+    url: 'https://receiver.example.com/hooks/orders',
     payload: [
-        'event' => 'notifyhub.event.created',
-        'event_id' => $event->public_id,
-        'severity' => $event->severity,
-        'title' => $event->title,
-        'message' => $event->message,
+        'event' => 'order.created',
+        'order_id' => $order->id,
+        'total' => $order->total,
     ],
     options: [
-        'event' => 'notifyhub.event.created',
-        'secret' => config('services.notifyhub.outbound_secret'),
-        'headers' => [
-            'X-Webhook-Source' => config('app.name'),
-        ],
+        'event' => 'order.created',
+        'secret' => config('services.partner.webhook_secret'),
+        'headers' => ['X-Webhook-Source' => config('app.name')],
         'max_attempts' => 5,
-        'queue' => true,
+        'queue' => true, // set false to send synchronously
     ],
 );
 ```
 
-### 2) Verify an incoming webhook
+### Verify an incoming webhook
 
 ```php
 use Illuminate\Http\Request;
@@ -88,52 +111,59 @@ public function __invoke(Request $request)
     $signature = (string) $request->header('X-Webhook-Signature');
 
     abort_unless(
-        Webhook::verify($request->getContent(), $signature, config('services.partner.secret')),
+        Webhook::verify($request->getContent(), $signature, config('services.partner.webhook_secret')),
         401,
-        'Invalid webhook signature.',
+        'Invalid webhook signature.'
     );
 
     // Process verified payload...
 }
 ```
 
-### 3) Manual retry
+### Retry a failed delivery
 
 ```php
 use WebhookManager\Laravel\Facades\Webhook;
 
 Webhook::retry($deliveryId);
-// or: Webhook::retry($deliveryModel);
+// or Webhook::retry($deliveryModel);
 ```
 
 ## Delivery logs
 
-Each send call creates a row in `webhook_deliveries` with:
+Each call to `Webhook::send()` creates/updates a row in `webhook_deliveries`:
 
-- status (`pending`, `delivered`, `failed`)
-- attempts and max attempts
-- last error and response status
-- payload, headers, generated signature
+- `status`: `pending`, `delivered`, `failed`
+- `attempts`, `max_attempts`, `last_attempt_at`, `delivered_at`
+- `response_status`, `last_error`, optional `response_body`
+- stored `payload`, `headers`, and generated `signature`
 
-Use this table for dashboards, failed delivery admin pages, and replay tooling.
+This table is useful for admin screens, incident investigation, and manual replay tools.
 
-## Integration idea with NotifyHub server
+## User stories
 
-When a new event is saved, trigger outbound hooks in a queue job:
+| Story | How to do it with this package |
+|------|------|
+| As a SaaS provider, I need to notify customers when an event happens. | Call `Webhook::send($url, $payload, ['event' => '...'])` from your domain event listener/job. |
+| As a receiver, I need to trust only authentic webhook calls. | Validate `X-Webhook-Signature` with `Webhook::verify($rawBody, $signature, $secret)`. |
+| As an operator, I need to recover from transient outages. | Keep queue mode enabled, tune `WEBHOOK_MANAGER_MAX_ATTEMPTS`, and use `Webhook::retry($deliveryId)` for manual replay. |
+| As a support engineer, I need auditability for deliveries. | Query the `webhook_deliveries` table for failures, response codes, and attempt history. |
 
-```php
-Webhook::send('https://consumer-app.test/hooks/notifyhub', [
-    'event_id' => $event->public_id,
-    'title' => $event->title,
-    'message' => $event->message,
-    'severity' => $event->severity,
-    'occurred_at' => $event->occurred_at?->toIso8601String(),
-], [
-    'event' => 'notifyhub.event.created',
-    'secret' => $project->webhook_secret,
-    'queue' => true,
-]);
-```
+## Recommended badges
+
+Already included above:
+
+- License
+- Latest release
+- PHP support
+- Laravel support
+- Last commit
+
+Useful additions once available:
+
+- **CI status** (`github/actions/workflow/status/...`) after adding GitHub Actions
+- **Code coverage** (Codecov/Coveralls) after publishing coverage reports
+- **Packagist version/downloads** after package publication on Packagist
 
 ## Testing
 
@@ -144,4 +174,3 @@ composer test
 ## License
 
 MIT
-
