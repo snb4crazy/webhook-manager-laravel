@@ -1,5 +1,10 @@
 # webhook-manager-laravel
 
+[![License](https://img.shields.io/github/license/snb4crazy/webhook-manager-laravel)](LICENSE)
+[![Latest Release](https://img.shields.io/github/v/release/snb4crazy/webhook-manager-laravel?sort=semver)](https://github.com/snb4crazy/webhook-manager-laravel/releases)
+[![PHP](https://img.shields.io/badge/PHP-8.2%2B-777BB4?logo=php&logoColor=white)](https://www.php.net/)
+[![Laravel](https://img.shields.io/badge/Laravel-10%20%7C%2011%20%7C%2012%20%7C%2013-blue?logo=laravel&logoColor=white)](https://laravel.com/)
+[![Last Commit](https://img.shields.io/github/last-commit/snb4crazy/webhook-manager-laravel)](https://github.com/snb4crazy/webhook-manager-laravel/commits/main)
 
 Queue-aware webhook delivery package for Laravel with HMAC signing, signature verification, retries, and delivery logs.
 
@@ -19,9 +24,11 @@ Queue-aware webhook delivery package for Laravel with HMAC signing, signature ve
 | PHP        | 8.2+    |
 | Laravel    | 10-13   |
 
-## Installation (before Packagist)
+## Installation
 
-Since this package is not yet on Packagist, install it directly from GitHub as a VCS dependency.
+### Option A: Before Packagist (GitHub VCS)
+
+Use this until the package is published on Packagist.
 
 1. Add repository source in your app `composer.json`:
 
@@ -36,13 +43,23 @@ Since this package is not yet on Packagist, install it directly from GitHub as a
 }
 ```
 
-2. Require the package:
+2. Require the package from the `master` branch:
 
 ```bash
-composer require snb4crazy/webhook-manager-laravel:dev-main
+composer require snb4crazy/webhook-manager-laravel:dev-master
 ```
 
-3. Publish config + migrations and migrate:
+### Option B: After Packagist (recommended)
+
+Once `v0.1.0` is tagged and synced to Packagist:
+
+```bash
+composer require snb4crazy/webhook-manager-laravel:^0.1
+```
+
+Then run the same setup steps:
+
+1. Publish config + migrations and migrate:
 
 ```bash
 php artisan vendor:publish --tag=webhook-manager-config
@@ -50,7 +67,7 @@ php artisan vendor:publish --tag=webhook-manager-migrations
 php artisan migrate
 ```
 
-4. If queue delivery is enabled (default), run a queue worker:
+2. If queue delivery is enabled (default), run a queue worker:
 
 ```bash
 php artisan queue:work
